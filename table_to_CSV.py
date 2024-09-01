@@ -5,12 +5,6 @@ import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 
-# To implement
-# machine_password = os.getenv("MACHINE_PASSWORD")
-# machine_address = os.getenv("MACHINE_ADDRESS")
-# machine_ssh_port = os.getenv("MACHINE_SSH_PORT")
-# machine_user = os.getenv("MACHINE_USER")
-
 SQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
 SQL_USER = os.getenv("SQL_USER")
 SQL_HOST = os.getenv("SQL_HOST")
@@ -30,7 +24,9 @@ cursor.execute(query)
 
 column_names = [i[0] for i in cursor.description]
 rows = cursor.fetchmany(LINES_PER_REQUEST)
-with open('local_copy.csv', 'w', newline='') as file:
+
+file_name = os.path.join(os.getcwd(), 'notebook', 'df_final.csv')
+with open(file_name, 'w', newline='') as file:
     writer = csv.writer(file)
     writer.writerow(column_names)
 
