@@ -1,11 +1,11 @@
-import numpy as np
-import pandas as pd
+import pprint
 import os
 
 class TradingSimulator:
-    def __init__(self, capital_inicial, imposto_curto=0,
+    def __init__(self, capital_inicial, imposto_curto=0.25,
                  corretagem_por_acao=0.00, taxa_sec_r=0.0000229,
-                 taxa_taf_r=0.000145, limite_taf=7.27):
+                 taxa_taf_r=0.000145, limite_taf=7.27,
+                 taxa_juros_diaria=0.001):
         self.capital_inicial = capital_inicial
         self.montante = capital_inicial
         self.quantidade_acoes = 0
@@ -19,6 +19,11 @@ class TradingSimulator:
         self.total_corretagem = 0
         self.total_taxas = 0
         self.total_impostos = 0
+        self.taxa_juros_diaria = taxa_juros_diaria
+        self.emprestimo_ativo = {}
+        self.emprestimos_efetivados = []
+        # garantir que logica de emprestimos seja consistente, ou seja, usar um unico atual ou uma lista deles
+        # consertar logicas na hora de pagar o emprestimo e na hora de gerar o relatorio
 
     def executar_decisao(self, decisao, quantidade, preco, data):
         if decisao == 'compra':
@@ -32,32 +37,33 @@ class TradingSimulator:
             'montante': self.montante,
             'quantidade_acoes': self.quantidade_acoes,
             'preco': preco,
-            'valor_portfolio': self.montante + self.quantidade_acoes * preco
+            'valor_portfolio': self.montante + self.quantidade_acoes * preco,
+            'despesas_totais': self.calcular_juros_totais() + self.total_impostos + self.total_taxas + self.total_corretagem,
+            'despesas_emprestimos': self.calcular_juros_totais()
         })
-        # print('.', sep='')
 
     def _comprar(self, quantidade, preco, data):
         # Calcular custo total considerando comissões
         custo_total = quantidade * preco
         corretagem = quantidade * self.corretagem_por_acao
 
-        if custo_total + corretagem <= self.montante:
+        # if custo_total + corretagem <= self.montante:
 
-            self.montante -= (custo_total + corretagem)
-            self.quantidade_acoes += quantidade
-            self.total_corretagem += corretagem
+        self.montante -= (custo_total + corretagem)
+        self.quantidade_acoes += quantidade
+        self.total_corretagem += corretagem
 
-            self.transacoes.append({
-                'data': data,
-                'tipo': 'compra',
-                'quantidade': quantidade,
-                'preco': preco,
-                'corretagem': corretagem,
-                'total': custo_total + corretagem
-            })
-        else:
-            print(
-                f'Não foi possível comprar {quantidade} ações a {preco} em {data}.')
+        self.transacoes.append({
+            'data': data,
+            'tipo': 'compra',
+            'quantidade': quantidade,
+            'preco': preco,
+            'corretagem': corretagem,
+            'total': custo_total + corretagem
+        })
+        # else:
+        #     print(
+        #         f'Não foi possível comprar {quantidade} ações a {preco} em {data}.')
 
     def _vender(self, quantidade, preco, data):
         if quantidade <= self.quantidade_acoes:
@@ -116,39 +122,28 @@ class TradingSimulator:
         avg_cost = custo_total / custo_quantidade_acoes if custo_quantidade_acoes > 0 else 0
         return quantidade * avg_cost
 
-    def obter_relatorio(self, final_preco):
-        valor_portfolio = self.montante + self.quantidade_acoes * final_preco
-        lucro_ou_prejuizo = valor_portfolio - self.capital_inicial
-        return {
-            'capital_inicial': self.capital_inicial,
-            'final_valor_portfolio': valor_portfolio,
-            'valor_portfolio_s_impostos': valor_portfolio + self.total_impostos,
-            'valor_portfolio_s_impostos_taxas': valor_portfolio + self.total_impostos + self.total_taxas,
-            'quantidade_acoes_restantes': self.quantidade_acoes,
-            'montante_restante': self.montante,
-            'lucro_ou_prejuizo': lucro_ou_prejuizo,
-            'retorno_percentual': (lucro_ou_prejuizo / self.capital_inicial) * 100 if self.capital_inicial > 0 else 0,
-            'total_corretagem': self.total_corretagem,
-            'total_taxas': self.total_taxas,
-            'total_impostos': self.total_impostos,
-            'custo_operacional_total': self.total_corretagem + self.total_taxas + self.total_impostos
+    def tomar_emprestimo(self, valor, data):
+        self.montante += valor
+        self.emprestimo_ativo = {
+            'valor': valor,
+            'data': data
         }
 
-    def obter_pnl_diario(self):
-        df = pd.DataFrame(self.posicoes)
-        if df.empty:
-            return pd.DataFrame(columns=['data', 'valor_portfolio', 'pnl', 'pnl_pct'])
+    def pagar_emprestimo(self, data):
+        emprestimo = self.emprestimo_ativo
+        delta = data - emprestimo['data']
+        # Um dia incompleto conta como um dia inteiro
+        dias = max(1, int(delta.total_seconds() // 3600 // 24))
+        juros = emprestimo['valor'] * self.taxa_juros_diaria * dias
+        total_pagamento = emprestimo['valor'] + juros
+        self._trocar_emprestivo_ativo(total_pagamento, juros)
 
-        df['data'] = pd.to_datetime(df['data'])
-        df = df.sort_values('data')
+    def _trocar_emprestivo_ativo(self, valor, juros):
+        self.montante -= valor
+        self.emprestimo_ativo['juros'] = juros
+        self.emprestimos_efetivados.append(self.emprestimo_ativo)
+        self.emprestimo_ativo = {}
 
-        daily = df.groupby(df['data'].dt.date,
-                           as_index=False).last().reset_index()
-        daily.rename(
-            columns={'data': 'dia', 'valor_portfolio': 'valor'}, inplace=True)
-
-        daily['pnl'] = daily['valor'].diff().fillna(
-            daily['valor'] - self.capital_inicial)
-        daily['pnl_pct'] = (daily['pnl'] / self.capital_inicial) * 100
-
-        return daily[['dia', 'valor', 'pnl', 'pnl_pct']]
+    def calcular_juros_totais(self):
+        return sum(e['juros']
+                   for e in self.emprestimos_efetivados)
