@@ -1,18 +1,19 @@
 from TradingSimulator import TradingSimulator
 import TradingRelatorio
 import pandas as pd
-trade_df = pd.read_csv('stock_action_data.csv', parse_dates=['Fdate'])
+trade_df = pd.read_csv('stock_action_data.csv')
+trade_df['Fdate'] = pd.to_datetime(trade_df['Fdate'])
 
-simulator = TradingSimulator(capital_inicial=10000)
+simulator = TradingSimulator(capital_inicial=0)
 loan_amount = 10000
-fazer_emprestimo = False
+fazer_emprestimo = True
 
 def executar_decisoes(simulator, rows):
     for _, row in day_trades.iterrows():
         acao = row['Action']
         preco = row['Current Price']
         data = row['Fdate']
-        quantidade = 5
+        quantidade = 20
 
         simulator.executar_decisao(
             decisao=acao,
@@ -21,27 +22,25 @@ def executar_decisoes(simulator, rows):
             data=data
         )
 
-def executar_decisao_nula(simulator, preco):
-    simulator.executar_decisao(
-        decisao='manter',
-        quantidade=0,
-        preco=preco,
-        data=None
-    )
-
 
 if fazer_emprestimo:
+    first_trade_date = trade_df['Fdate'].min()
+    last_trade_date = trade_df['Fdate'].max()
+    simulator.registrar_posicao(first_trade_date, 0)
+    simulator.tomar_emprestimo(loan_amount, first_trade_date)
     for date, day_trades in trade_df.groupby(trade_df['Fdate'].dt.date):
-        simulator.tomar_emprestimo(loan_amount, date)
         executar_decisoes(simulator, day_trades)
-        simulator.pagar_emprestimo(date)
+    simulator.pagar_emprestimo(last_trade_date)
+    simulator.atualizar_posicao()
 else:
     for date, day_trades in trade_df.groupby(trade_df['Fdate'].dt.date):
         executar_decisoes(simulator, day_trades)
 
-executar_decisao_nula(simulator, trade_df['Current Price'].iloc[-1])
+simulator.registrar_posicao(
+    simulator.posicoes[-1]['data'],
+    simulator.posicoes[-1]['preco']
+)
 
 # Obter resumo final
-resumo = TradingRelatorio.obter_relatorio(simulator)
-print(TradingRelatorio.obter_pnl_diario(simulator))
-print(resumo)
+TradingRelatorio.obter_relatorio(simulator)
+TradingRelatorio.obter_pnl_diario(simulator)

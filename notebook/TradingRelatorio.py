@@ -34,6 +34,7 @@ def obter_pnl_diario(simulador):
         return pd.DataFrame()
     df['valor_portfolio_bruto'] = df['valor_portfolio'] + \
         df['despesas_totais']
+    df['valor_pos_emp'] = df['valor_portfolio'] - df['montante_devido']
 
     df['data'] = pd.to_datetime(df['data'])
     df = df.sort_values('data')
@@ -43,10 +44,17 @@ def obter_pnl_diario(simulador):
     daily.rename(
         columns={'data': 'dia', 'valor_portfolio': 'valor', 'valor_portfolio_bruto': 'valor_b'}, inplace=True)
 
-    daily['pnl'] = daily['valor'].diff().fillna(
-        daily['valor'] - simulador.capital_inicial)
+    daily['pnl'] = daily['valor_pos_emp'].diff().fillna(
+        daily['valor_pos_emp'] - simulador.capital_inicial
+    )
 
     daily['pnl_b'] = daily['valor_b'].diff().fillna(
-        daily['valor_b'] - simulador.capital_inicial)
+        daily['valor_b'] - simulador.capital_inicial
+    )
 
-    return daily[['dia', 'valor', 'valor_b', 'pnl', 'pnl_b']]
+    # daily['pnl%'] = daily['pnl'] / daily['valor'].shift(1)
+    # daily['pnl%'] = daily['pnl%'].fillna(0) * 100
+
+    # daily['dia'] = daily['dia'].dt.date
+
+    print(daily[['dia', 'valor_b', 'valor', 'valor_pos_emp', 'pnl', 'pnl_b']])

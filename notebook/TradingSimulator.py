@@ -21,7 +21,7 @@ class TradingSimulator:
         self.total_impostos = 0
         self.taxa_juros_diaria = taxa_juros_diaria
         self.emprestimo_ativo = {}
-        self.emprestimos_efetivados = []
+        self.emprestimos = []
         # garantir que logica de emprestimos seja consistente, ou seja, usar um unico atual ou uma lista deles
         # consertar logicas na hora de pagar o emprestimo e na hora de gerar o relatorio
 
@@ -31,7 +31,9 @@ class TradingSimulator:
         elif decisao == 'venda':
             self._vender(quantidade, preco, data)
 
-        # Registrar estado atual
+        self.registrar_posicao(data, preco)
+
+    def registrar_posicao(self, data, preco):
         self.posicoes.append({
             'data': data,
             'montante': self.montante,
@@ -39,8 +41,16 @@ class TradingSimulator:
             'preco': preco,
             'valor_portfolio': self.montante + self.quantidade_acoes * preco,
             'despesas_totais': self.calcular_juros_totais() + self.total_impostos + self.total_taxas + self.total_corretagem,
-            'despesas_emprestimos': self.calcular_juros_totais()
+            'montante_devido': self.calcular_montante_devido()
         })
+
+    def atualizar_posicao(self):
+        if not self.posicoes:
+            return
+
+        ultimo_preco = self.posicoes[-1]['preco']
+        ultimo_data = self.posicoes[-1]['data']
+        self.registrar_posicao(ultimo_data, ultimo_preco)
 
     def _comprar(self, quantidade, preco, data):
         # Calcular custo total considerando comissões
@@ -125,25 +135,37 @@ class TradingSimulator:
     def tomar_emprestimo(self, valor, data):
         self.montante += valor
         self.emprestimo_ativo = {
+            'id': os.urandom(8).hex(),
             'valor': valor,
-            'data': data
+            'data': data,
+            'data_pgto': None,
+            'pago': False
         }
+        self.emprestimos.append(self.emprestimo_ativo)
 
     def pagar_emprestimo(self, data):
         emprestimo = self.emprestimo_ativo
         delta = data - emprestimo['data']
         # Um dia incompleto conta como um dia inteiro
         dias = max(1, int(delta.total_seconds() // 3600 // 24))
-        juros = emprestimo['valor'] * self.taxa_juros_diaria * dias
+        # Juros compostos
+        juros = emprestimo['valor'] * \
+            ((1 + self.taxa_juros_diaria) ** dias - 1)
         total_pagamento = emprestimo['valor'] + juros
-        self._trocar_emprestivo_ativo(total_pagamento, juros)
+        self.montante -= total_pagamento
+        self._trocar_emprestimo_ativo(juros, data)
 
-    def _trocar_emprestivo_ativo(self, valor, juros):
-        self.montante -= valor
-        self.emprestimo_ativo['juros'] = juros
-        self.emprestimos_efetivados.append(self.emprestimo_ativo)
+    def _trocar_emprestimo_ativo(self, juros, data):
+        index = self.emprestimos.index(self.emprestimo_ativo)
+        self.emprestimos[index]['pago'] = True
+        self.emprestimos[index]['juros'] = juros
+        self.emprestimos[index]['data_pgto'] = data
         self.emprestimo_ativo = {}
 
     def calcular_juros_totais(self):
         return sum(e['juros']
-                   for e in self.emprestimos_efetivados)
+                   for e in self.emprestimos if e['pago'])
+
+    def calcular_montante_devido(self):
+        return sum(e['valor']
+                   for e in self.emprestimos if not e['pago'])
