@@ -1,11 +1,21 @@
+from io import StringIO
 from TradingSimulator import TradingSimulator
 import TradingRelatorio
 import pandas as pd
-trade_df = pd.read_csv('stock_action_data.csv')
-trade_df['Fdate'] = pd.to_datetime(trade_df['Fdate'])
+
+# test_data = '''
+# Fdate,Current Price,Action,Quantidade
+# 2025-05-22 09:30:00,20.00,compra,5
+# 2025-05-23 09:35:00,30.00,venda,3
+# 2025-05-24 09:40:00,30.00,manter,NaN
+# '''
+
+# trade_df = pd.read_csv(StringIO(test_data), parse_dates=['Fdate'])
+trade_df = pd.read_csv('stock_action_data.csv', parse_dates=['Fdate'])
+trade_df['Quantidade'] = None
 
 simulator = TradingSimulator(capital_inicial=0)
-loan_amount = 10000
+loan_amount = 1000
 fazer_emprestimo = True
 
 def executar_decisoes(simulator, rows):
@@ -13,7 +23,7 @@ def executar_decisoes(simulator, rows):
         acao = row['Action']
         preco = row['Current Price']
         data = row['Fdate']
-        quantidade = 20
+        quantidade = row['Quantidade'] if pd.notna(row['Quantidade']) else 10
 
         simulator.executar_decisao(
             decisao=acao,
@@ -30,6 +40,7 @@ if fazer_emprestimo:
     simulator.tomar_emprestimo(loan_amount, first_trade_date)
     for date, day_trades in trade_df.groupby(trade_df['Fdate'].dt.date):
         executar_decisoes(simulator, day_trades)
+    simulator.atualizar_juros_emprestimos(pd.Timestamp(date))
     simulator.pagar_emprestimo(last_trade_date)
     simulator.atualizar_posicao()
 else:

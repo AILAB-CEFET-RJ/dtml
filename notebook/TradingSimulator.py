@@ -5,7 +5,7 @@ class TradingSimulator:
     def __init__(self, capital_inicial, imposto_curto=0.25,
                  corretagem_por_acao=0.00, taxa_sec_r=0.0000229,
                  taxa_taf_r=0.000145, limite_taf=7.27,
-                 taxa_juros_diaria=0.001):
+                 taxa_juros_diaria=0):
         self.capital_inicial = capital_inicial
         self.montante = capital_inicial
         self.quantidade_acoes = 0
@@ -20,10 +20,8 @@ class TradingSimulator:
         self.total_taxas = 0
         self.total_impostos = 0
         self.taxa_juros_diaria = taxa_juros_diaria
-        self.emprestimo_ativo = {}
+        self.emprestimo_ativo_idx = -1
         self.emprestimos = []
-        # garantir que logica de emprestimos seja consistente, ou seja, usar um unico atual ou uma lista deles
-        # consertar logicas na hora de pagar o emprestimo e na hora de gerar o relatorio
 
     def executar_decisao(self, decisao, quantidade, preco, data):
         if decisao == 'compra':
@@ -31,16 +29,21 @@ class TradingSimulator:
         elif decisao == 'venda':
             self._vender(quantidade, preco, data)
 
+        self.atualizar_juros_emprestimos(data)
         self.registrar_posicao(data, preco)
 
     def registrar_posicao(self, data, preco):
+        despesas_totais = self.total_impostos + self.total_taxas + self.total_corretagem
         self.posicoes.append({
             'data': data,
-            'montante': self.montante,
+            'montante_final': self.montante - despesas_totais,
+            'montante_liquido': self.montante,
             'quantidade_acoes': self.quantidade_acoes,
             'preco': preco,
-            'valor_portfolio': self.montante + self.quantidade_acoes * preco,
-            'despesas_totais': self.calcular_juros_totais() + self.total_impostos + self.total_taxas + self.total_corretagem,
+            'valor_portfolio': self.quantidade_acoes * preco,
+            'despesas_totais': despesas_totais,
+            'juros_emprestimos': self.calcular_juros_totais(),
+            'juros_devidos': self.calcular_juros_devidos(),
             'montante_devido': self.calcular_montante_devido()
         })
 
@@ -59,7 +62,7 @@ class TradingSimulator:
 
         # if custo_total + corretagem <= self.montante:
 
-        self.montante -= (custo_total + corretagem)
+        self.montante -= custo_total
         self.quantidade_acoes += quantidade
         self.total_corretagem += corretagem
 
@@ -94,8 +97,7 @@ class TradingSimulator:
 
             # Atualizar posição e caixa
             total_taxas = taxa_sec_aplicada + taxa_taf_aplicada
-            receita_real = valor_venda - corretagem - total_taxas - imposto
-            self.montante += receita_real
+            self.montante += valor_venda
             self.quantidade_acoes -= quantidade
 
             # Atualizar totais
@@ -111,8 +113,7 @@ class TradingSimulator:
                 'corretagem': corretagem,
                 'taxa_sec_aplicada': taxa_sec_aplicada,
                 'taxa_taf_aplicada': taxa_taf_aplicada,
-                'total_imposto': imposto,
-                'receita_real': receita_real
+                'total_imposto': imposto
             })
 
     def _calcular_custo_base(self, quantidade):
@@ -134,37 +135,55 @@ class TradingSimulator:
 
     def tomar_emprestimo(self, valor, data):
         self.montante += valor
-        self.emprestimo_ativo = {
+        self.emprestimos.append({
             'id': os.urandom(8).hex(),
             'valor': valor,
             'data': data,
             'data_pgto': None,
             'pago': False
-        }
-        self.emprestimos.append(self.emprestimo_ativo)
+        })
+        self.emprestimo_ativo_idx = len(self.emprestimos) - 1
+
+    # def _encontrar_emprestimo(self, id):
+        # for index, emprestimo in enumerate(self.emprestimos):
+        #     if emprestimo['id'] == id:
+        #         return emprestimo, index
+        # raise ValueError(f"Empréstimo com id {id} não encontrado.")
+
+    def atualizar_juros_emprestimos(self, data):
+        for emprestimo in self.emprestimos:
+            if not emprestimo['pago']:
+                delta = data - emprestimo.get('data')
+                # Um dia incompleto conta como um dia inteiro
+                dias = max(1, int(delta.total_seconds() // 3600 // 24))
+                # Juros compostos
+                juros = emprestimo['valor'] * \
+                    ((1 + self.taxa_juros_diaria) ** dias - 1)
+                emprestimo['juros'] = juros
 
     def pagar_emprestimo(self, data):
-        emprestimo = self.emprestimo_ativo
-        delta = data - emprestimo['data']
-        # Um dia incompleto conta como um dia inteiro
-        dias = max(1, int(delta.total_seconds() // 3600 // 24))
-        # Juros compostos
-        juros = emprestimo['valor'] * \
-            ((1 + self.taxa_juros_diaria) ** dias - 1)
-        total_pagamento = emprestimo['valor'] + juros
+        self.atualizar_juros_emprestimos(data)
+        emprestimo = self.emprestimos[self.emprestimo_ativo_idx]
+        total_pagamento = emprestimo['valor'] + emprestimo['juros']
         self.montante -= total_pagamento
-        self._trocar_emprestimo_ativo(juros, data)
+        self._trocar_emprestimo_ativo(emprestimo['juros'], data)
+        print(
+            f'Pago empréstimo {emprestimo["id"]} no valor de {total_pagamento:.2f} em {data}.')
 
     def _trocar_emprestimo_ativo(self, juros, data):
-        index = self.emprestimos.index(self.emprestimo_ativo)
-        self.emprestimos[index]['pago'] = True
-        self.emprestimos[index]['juros'] = juros
-        self.emprestimos[index]['data_pgto'] = data
-        self.emprestimo_ativo = {}
+        id = self.emprestimo_ativo_idx
+        self.emprestimos[id]['pago'] = True
+        self.emprestimos[id]['juros'] = juros
+        self.emprestimos[id]['data_pgto'] = data
+        self.emprestimo_ativo_id = -1
 
     def calcular_juros_totais(self):
         return sum(e['juros']
-                   for e in self.emprestimos if e['pago'])
+                   for e in self.emprestimos)
+
+    def calcular_juros_devidos(self):
+        return sum(e['juros']
+                   for e in self.emprestimos if not e['pago'])
 
     def calcular_montante_devido(self):
         return sum(e['valor']

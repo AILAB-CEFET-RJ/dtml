@@ -3,38 +3,49 @@ import pandas as pd
 from pprint import pprint
 
 def obter_relatorio(simulador):
-    valor_portfolio = simulador.montante + \
-        simulador.quantidade_acoes * simulador.posicoes[-1]['preco']
-    lucro_ou_prejuizo = valor_portfolio - simulador.capital_inicial
-    total_juros_emprestimos = simulador.calcular_juros_totais()
+    valor_portfolio = simulador.quantidade_acoes * \
+        simulador.posicoes[-1]['preco']
+
+    preco_acao_final = simulador.posicoes[-1]['preco']
+    custo_juros_emprestimos = simulador.calcular_juros_totais()
+
+    custo_corretagem_taxas_impostos = simulador.total_corretagem + \
+        simulador.total_taxas + simulador.total_impostos
+
+    saldo_bruto_final = simulador.montante + valor_portfolio
+    saldo_de_negociacoes = saldo_bruto_final + \
+        custo_juros_emprestimos + custo_corretagem_taxas_impostos
+    saldo_liquido_final = saldo_bruto_final - custo_corretagem_taxas_impostos
+
+    lucro_ou_prejuizo_final = saldo_liquido_final - simulador.capital_inicial
 
     relatorio = {
         'capital_inicial': simulador.capital_inicial,
-        'final_valor_portfolio': valor_portfolio,
-        'valor_portfolio_s_impostos': valor_portfolio + simulador.total_impostos,
-        'valor_portfolio_s_impostos_taxas': valor_portfolio + simulador.total_impostos + simulador.total_taxas,
         'quantidade_acoes_restantes': simulador.quantidade_acoes,
+        'preco_acao_final': preco_acao_final,
+        'valor_portfolio': valor_portfolio,
+        'custo_juros_emprestimos': custo_juros_emprestimos,
         'montante_restante': simulador.montante,
-        'lucro_ou_prejuizo': lucro_ou_prejuizo,
-        'retorno_percentual': (lucro_ou_prejuizo / simulador.capital_inicial) * 100 if simulador.capital_inicial > 0 else 0,
-        'total_corretagem': simulador.total_corretagem,
+        '  saldo_de_negociacoes': saldo_de_negociacoes,
+        '  saldo_bruto_final': saldo_bruto_final,
+        'custo_corretagem': simulador.total_corretagem,
         'total_taxas': simulador.total_taxas,
         'total_impostos': simulador.total_impostos,
-        'total_emprestimos': total_juros_emprestimos,
-        'total_juros_emprestimos': total_juros_emprestimos,
-        'custo_corretagem_taxas_imposto': simulador.total_corretagem + simulador.total_taxas + simulador.total_impostos,
-        'custo_operacional_total': simulador.total_corretagem + simulador.total_taxas + simulador.total_impostos + total_juros_emprestimos,
+        'custo_corretagem_taxas_impostos': custo_corretagem_taxas_impostos,
+        '  saldo_liquido_final': saldo_liquido_final,
+        '  lucro_ou_prejuizo_final': lucro_ou_prejuizo_final,
     }
 
-    pprint(relatorio)
+    pprint(relatorio, sort_dicts=False)
 
 def obter_pnl_diario(simulador):
     df = pd.DataFrame(simulador.posicoes)
     if df.empty:
         return pd.DataFrame()
-    df['valor_portfolio_bruto'] = df['valor_portfolio'] + \
-        df['despesas_totais']
-    df['valor_pos_emp'] = df['valor_portfolio'] - df['montante_devido']
+    df['saldo_bruto'] = df['valor_portfolio'] + \
+        df['montante_liquido'] - df['montante_devido']
+    df['saldo_liquido'] = df['saldo_bruto'] - \
+        df['despesas_totais'] - df['juros_devidos']
 
     df['data'] = pd.to_datetime(df['data'])
     df = df.sort_values('data')
@@ -42,14 +53,14 @@ def obter_pnl_diario(simulador):
     daily = df.groupby(df['data'].dt.date,
                        as_index=False).last().reset_index()
     daily.rename(
-        columns={'data': 'dia', 'valor_portfolio': 'valor', 'valor_portfolio_bruto': 'valor_b'}, inplace=True)
+        columns={'data': 'dia'}, inplace=True)
 
-    daily['pnl'] = daily['valor_pos_emp'].diff().fillna(
-        daily['valor_pos_emp'] - simulador.capital_inicial
+    daily['pnl'] = daily['saldo_liquido'].diff().fillna(
+        daily['saldo_liquido'] - simulador.capital_inicial
     )
 
-    daily['pnl_b'] = daily['valor_b'].diff().fillna(
-        daily['valor_b'] - simulador.capital_inicial
+    daily['pnl_b'] = daily['saldo_bruto'].diff().fillna(
+        daily['saldo_bruto'] - simulador.capital_inicial
     )
 
     # daily['pnl%'] = daily['pnl'] / daily['valor'].shift(1)
@@ -57,4 +68,4 @@ def obter_pnl_diario(simulador):
 
     # daily['dia'] = daily['dia'].dt.date
 
-    print(daily[['dia', 'valor_b', 'valor', 'valor_pos_emp', 'pnl', 'pnl_b']])
+    print(daily[['dia', 'saldo_bruto', 'saldo_liquido', 'pnl', 'pnl_b']])
