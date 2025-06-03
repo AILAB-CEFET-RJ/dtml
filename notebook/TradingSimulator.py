@@ -5,7 +5,7 @@ class TradingSimulator:
     def __init__(self, capital_inicial, imposto_curto=0.25,
                  corretagem_por_acao=0.00, taxa_sec_r=0.0000229,
                  taxa_taf_r=0.000145, limite_taf=7.27,
-                 taxa_juros_diaria=0):
+                 taxa_juros_diaria=0.002):
         self.capital_inicial = capital_inicial
         self.montante = capital_inicial
         self.quantidade_acoes = 0

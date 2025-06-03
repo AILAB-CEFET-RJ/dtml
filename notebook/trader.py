@@ -2,6 +2,7 @@ from io import StringIO
 from TradingSimulator import TradingSimulator
 import TradingRelatorio
 import pandas as pd
+from pprint import pprint
 
 # test_data = '''
 # Fdate,Current Price,Action,Quantidade
@@ -54,4 +55,6 @@ simulator.registrar_posicao(
 
 # Obter resumo final
 TradingRelatorio.obter_relatorio(simulator)
-TradingRelatorio.obter_pnl_diario(simulator)
+
+df = TradingRelatorio.obter_pnl_diario(simulator)
+fig = TradingRelatorio.gerar_grafico(df)
