@@ -3,20 +3,14 @@ from TradingSimulator import TradingSimulator
 import TradingRelatorio
 import pandas as pd
 from pprint import pprint
+import warnings
+warnings.filterwarnings("ignore")
 
-# test_data = '''
-# Fdate,Current Price,Action,Quantidade
-# 2025-05-22 09:30:00,20.00,compra,5
-# 2025-05-23 09:35:00,30.00,venda,3
-# 2025-05-24 09:40:00,30.00,manter,NaN
-# '''
-
-# trade_df = pd.read_csv(StringIO(test_data), parse_dates=['Fdate'])
-trade_df = pd.read_csv('stock_action_data.csv', parse_dates=['Fdate'])
+trade_df = pd.read_csv('stock_action_data_xb.csv', parse_dates=['Fdate'])
 trade_df['Quantidade'] = None
 
 simulator = TradingSimulator(capital_inicial=0)
-loan_amount = 1000
+loan_amount = 10000
 fazer_emprestimo = True
 
 def executar_decisoes(simulator, rows):
@@ -24,7 +18,16 @@ def executar_decisoes(simulator, rows):
         acao = row['Action']
         preco = row['Current Price']
         data = row['Fdate']
-        quantidade = row['Quantidade'] if pd.notna(row['Quantidade']) else 10
+        if acao == 'compra':
+            orcamento_atual = simulator.montante
+            quantidade = int((orcamento_atual * 0.80) // preco)
+            if quantidade < 1:
+                # If no budget, try to acquire 5 shares via loan
+                quantidade = 5
+        elif acao == 'venda':
+            quantidade = simulator.quantidade_acoes
+        else:
+            quantidade = row['Quantidade'] if pd.notna(row['Quantidade']) else 10
 
         simulator.executar_decisao(
             decisao=acao,

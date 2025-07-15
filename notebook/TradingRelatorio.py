@@ -14,8 +14,6 @@ def obter_relatorio(simulador):
         simulador.total_taxas + simulador.total_impostos
 
     saldo_bruto_final = simulador.montante + valor_portfolio
-    saldo_de_negociacoes = saldo_bruto_final + \
-        custo_juros_emprestimos + custo_corretagem_taxas_impostos
     saldo_liquido_final = saldo_bruto_final - custo_corretagem_taxas_impostos
 
     lucro_ou_prejuizo_final = saldo_liquido_final - simulador.capital_inicial
@@ -27,7 +25,6 @@ def obter_relatorio(simulador):
         'valor_portfolio': valor_portfolio,
         'custo_juros_emprestimos': custo_juros_emprestimos,
         'montante_restante': simulador.montante,
-        '  saldo_de_negociacoes': saldo_de_negociacoes,
         '  saldo_bruto_final': saldo_bruto_final,
         'custo_corretagem': simulador.total_corretagem,
         'total_taxas': simulador.total_taxas,
