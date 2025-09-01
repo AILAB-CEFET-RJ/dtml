@@ -8,7 +8,8 @@ class TradingSimulator:
                  taxa_juros_diaria=0.002, emprestimo_automatico=True,
                  permitir_montante_negativo=False, log_transacoes=True,
                  pagar_emprestimo_automaticamente=False,
-                 limite_emprestimo=20000):
+                 limite_emprestimo=20000,
+                 vender_acoes_para_pagar_emprestimo=True):
         self.capital_inicial = capital_inicial
         self.montante = capital_inicial
         self.quantidade_acoes = 0
@@ -30,6 +31,7 @@ class TradingSimulator:
         self.log_transacoes = log_transacoes
         self.pagar_emprestimo_automaticamente = pagar_emprestimo_automaticamente
         self.limite_emprestimo = limite_emprestimo
+        self.vender_acoes_para_pagar_emprestimo = vender_acoes_para_pagar_emprestimo
 
         print("Configurações do TradingSimulator:")
         print(f"  capital_inicial: {self.capital_inicial}")
@@ -44,6 +46,7 @@ class TradingSimulator:
         print(f"  log_transacoes: {self.log_transacoes}")
         print(f"  pagar_emprestimo_automaticamente: {self.pagar_emprestimo_automaticamente}")
         print(f"  limite_emprestimo: {self.limite_emprestimo}")
+        print(f"  vender_acoes_para_pagar_emprestimo: {self.vender_acoes_para_pagar_emprestimo}")
 
     def executar_decisao(self, decisao, quantidade, preco, data):
         if decisao == 'compra':
@@ -192,6 +195,7 @@ class TradingSimulator:
             if total_devido_apos > self.limite_emprestimo:
                 print(f"Limite de empréstimo atingido. Não é possível tomar mais empréstimos. (Limite: {self.limite_emprestimo:.2f}, Devido após: {total_devido_apos:.2f})")
                 return False
+            
         self.montante += valor
         novo_emprestimo = {
             'id': os.urandom(8).hex(),
@@ -200,9 +204,13 @@ class TradingSimulator:
             'data_pgto': None,
             'pago': False
         }
+
         self.emprestimos.append(novo_emprestimo)
         self.emprestimo_ativo_idx = len(self.emprestimos) - 1
+
         print(f'Tomado empréstimo {novo_emprestimo["id"]} no valor de {valor:.2f} em {data}.')
+        limite_restante = self.limite_emprestimo - (self.calcular_montante_devido() + self.calcular_juros_devidos())
+        print(f'Limite de empréstimo restante: {limite_restante:.2f}')
         return True
 
     # def _encontrar_emprestimo(self, id):
@@ -228,12 +236,20 @@ class TradingSimulator:
             if not emprestimo['pago']:
                 juros = emprestimo.get('juros', 0)
                 total_pagamento = emprestimo['valor'] + juros
+                if self.montante < total_pagamento and self.vender_acoes_para_pagar_emprestimo:
+                    preco_acao = self.posicoes[-1]['preco'] if self.posicoes else 1.0
+                    quantidade_necessaria = int((total_pagamento - self.montante) // preco_acao) + 1
+                    quantidade_necessaria = min(quantidade_necessaria, self.quantidade_acoes)
+                    if quantidade_necessaria > 0:
+                        self._vender(quantidade_necessaria, preco_acao, data)
                 self.montante -= total_pagamento
                 self.emprestimos[idx]['pago'] = True
                 self.emprestimos[idx]['juros'] = juros
                 self.emprestimos[idx]['data_pgto'] = data
                 print(
                     f'Pago empréstimo {emprestimo["id"]} no valor de {total_pagamento:.2f} (juros pagos: {juros:.2f}) em {data}.')
+                limite_restante = self.limite_emprestimo - (self.calcular_montante_devido() + self.calcular_juros_devidos())
+                print(f'Limite de empréstimo restante: {limite_restante:.2f}')
         self.emprestimo_ativo_idx = -1
 
     def _trocar_emprestimo_ativo(self, juros, data):
@@ -244,13 +260,21 @@ class TradingSimulator:
         self.emprestimo_ativo_id = -1
 
     def calcular_juros_totais(self):
-        return sum(e['juros']
+        return sum(e.get('juros', 0)
                    for e in self.emprestimos)
 
     def calcular_juros_devidos(self):
-        return sum(e['juros']
+        return sum(e.get('juros', 0)
                    for e in self.emprestimos if not e['pago'])
 
     def calcular_montante_devido(self):
         return sum(e['valor']
                    for e in self.emprestimos if not e['pago'])
+
+    def calcular_limite_emprestimo_restante(self):
+        """
+        Retorna o limite de empréstimo restante considerando o limite total, o montante devido e os juros devidos.
+        """
+        if self.limite_emprestimo is None:
+            return float('inf')
+        return self.limite_emprestimo - (self.calcular_montante_devido() + self.calcular_juros_devidos())

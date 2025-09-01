@@ -6,7 +6,7 @@ from pprint import pprint
 import warnings
 warnings.filterwarnings("ignore")
 
-trade_df = pd.read_csv('stock_action_data_xb.csv', parse_dates=['Fdate'])
+trade_df = pd.read_csv('stock_action_data.csv', parse_dates=['Fdate'])
 trade_df['Quantidade'] = None
 
 simulator = TradingSimulator(capital_inicial=0)

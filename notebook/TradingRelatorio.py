@@ -18,6 +18,16 @@ def obter_relatorio(simulador):
 
     lucro_ou_prejuizo_final = saldo_liquido_final - simulador.capital_inicial
 
+    # --- NOVO BLOCO: Análise de transações ---
+    transacoes = simulador.transacoes
+    compras = [t for t in transacoes if t['tipo'] == 'compra']
+    vendas = [t for t in transacoes if t['tipo'] == 'venda']
+
+    total_compradas = sum(t['quantidade'] for t in compras)
+    total_vendidas = sum(t['quantidade'] for t in vendas)
+    preco_medio_compra = (sum(t['quantidade'] * t['preco'] for t in compras) / total_compradas) if total_compradas > 0 else 0
+    preco_medio_venda = (sum(t['quantidade'] * t['preco'] for t in vendas) / total_vendidas) if total_vendidas > 0 else 0
+
     relatorio = {
         'capital_inicial': simulador.capital_inicial,
         'quantidade_acoes_restantes': simulador.quantidade_acoes,
@@ -32,6 +42,15 @@ def obter_relatorio(simulador):
         'custo_corretagem_taxas_impostos': custo_corretagem_taxas_impostos,
         '  saldo_liquido_final': saldo_liquido_final,
         '  lucro_ou_prejuizo_final': lucro_ou_prejuizo_final,
+        # --- NOVOS CAMPOS ---
+        'total_acoes_compradas': total_compradas,
+        'preco_medio_compra': preco_medio_compra,
+        'total_acoes_vendidas': total_vendidas,
+        'preco_medio_venda': preco_medio_venda,
+        # --- CAMPOS DE EMPRÉSTIMO ---
+        'total_emprestimos_tomados': len(simulador.emprestimos),
+        'valor_total_emprestimos': sum(e['valor'] for e in simulador.emprestimos),
+        'valor_medio_emprestimo': (sum(e['valor'] for e in simulador.emprestimos) / len(simulador.emprestimos)) if simulador.emprestimos else 0,
     }
 
     pprint(relatorio, sort_dicts=False)
@@ -97,24 +116,37 @@ def gerar_grafico(df):
         mode='lines+markers',
         name='pnl%',
         line=dict(color='#1FB8CD'),
-        cliponaxis=False
+        cliponaxis=False,
+        yaxis='y1'
     ))
     fig.add_trace(go.Scatter(
         x=df['dia'], y=df['sp500%'],
         mode='lines+markers',
         name='sp500%',
         line=dict(color='#FFC185'),
-        cliponaxis=False
+        cliponaxis=False,
+        yaxis='y2'
     ))
 
     fig.update_layout(
         title='pnl% vs sp500%',
         xaxis_title='Dia',
-        yaxis_title='Valor.',
+        yaxis=dict(
+            title='pnl%',
+            title_font=dict(color='#1FB8CD'),
+            tickfont=dict(color='#1FB8CD'),
+        ),
+        yaxis2=dict(
+            title='sp500%',
+            title_font=dict(color='#FFC185'),
+            tickfont=dict(color='#FFC185'),
+            overlaying='y',
+            side='right',
+        ),
         legend=dict(orientation='h', yanchor='bottom',
                     y=1.05, xanchor='center', x=0.5)
     )
-    fig.update_xaxes(tickvals=df['dia'], tickangle=0)
+    fig.update_xaxes(tickvals=df['dia'], tickangle=45)
     fig.update_yaxes(tickformat='.2f')
 
     fig.write_image('pnl_sp500.png')
